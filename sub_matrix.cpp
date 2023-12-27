@@ -245,11 +245,15 @@ namespace Convolution
                             for (o = 0; o < conVectorSize; ++o)
                             {
 
-                                // srcMatrix index position relative to weight vector index
-                                srcIndex = get_src_index(i, k, n + o, featureC, featureW, featureH);
-
                                 // absolute index position of convolution weight vector
                                 conIndex = get_con_index(j, k, o, conVectorSize, featureC);
+
+                                if (convVector[conIndex] == 0) {
+                                    continue;
+                                }
+
+                                // srcMatrix index position relative to weight vector index
+                                srcIndex = get_src_index(i, k, n + o, featureC, featureW, featureH);
 
                                 // multiply srcMatrix pixel value with convVector weight and store the result in dstMatrix
                                 dstMatrix[dstIndex] += convVector[conIndex] * srcMatrix[srcIndex];
