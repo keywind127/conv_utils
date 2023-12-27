@@ -165,21 +165,24 @@ namespace Convolution
 
     }
 
-    inline size_t get_con_index(size_t j, size_t k, size_t o, size_t conVectorSize, size_t featureC)
+    inline size_t get_con_index(size_t j, size_t k, size_t p, size_t q, size_t featureC, size_t convW, size_t convH)
     {
 
         // j : outputChannelIndex
         // k : inputChannelIndex
-        // o : vectorWeightIndex
+        // p : vectorWeightRowIndex
+        // q : vectorWeightColIndex
 
-        return o + k * conVectorSize + j * conVectorSize * featureC;
+        size_t convHW = convH * convW;
+
+        return q + p * convW + k * convHW + j * featureC * convHW;
 
     }
 
     void apply_convolution(
                            double * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
                            double * srcMatrix,  // (batchSize, featureC, featureH * featureW)
-                           double * convVector, // (convC, featureC, featureW * (convH - 1) + convW)
+                           double * convVector, // (convC, featureC, convH, convW)
                            size_t featureH,
                            size_t featureW,
                            size_t featureC,
@@ -198,7 +201,7 @@ namespace Convolution
         size_t dstW = (featureW - convW) / strideW + 1;
 
         // indexes for iteration
-        size_t i, j, k, l, m, n, o;
+        size_t i, j, k, l, m, n, o, p, q;
 
         // exclusive row border of input feature map
         size_t rowBorder = featureH - convH + 1;
@@ -207,7 +210,7 @@ namespace Convolution
         size_t colBorder = featureW - convW + 1;
 
         // size of convolution matrix weight vector (last axis)
-        size_t conVectorSize = featureW * (convH - 1) + convW;
+        // size_t conVectorSize = featureW * (convH - 1) + convW;
 
         // indexes for three different matrices
         size_t srcIndex, dstIndex, conIndex;
@@ -241,22 +244,21 @@ namespace Convolution
                             // initialize dstMatrix index position with 0
                             dstMatrix[dstIndex] = 0;
 
-                            // iterate through convolution weight vector
-                            for (o = 0; o < conVectorSize; ++o)
+                            for (p = 0; p < convH; ++p)
                             {
 
-                                // absolute index position of convolution weight vector
-                                conIndex = get_con_index(j, k, o, conVectorSize, featureC);
+                                for (q = 0; q < convW; ++q)
+                                {
 
-                                if (convVector[conIndex] == 0) {
-                                    continue;
+                                    n = (l + p) * featureW + (m + q);
+
+                                    srcIndex = get_src_index(i, k, n, featureC, featureW, featureH);
+
+                                    conIndex = get_con_index(j, k, p, q, featureC, convW, convH);
+
+                                    dstMatrix[dstIndex] += convVector[conIndex] * srcMatrix[srcIndex];
+
                                 }
-
-                                // srcMatrix index position relative to weight vector index
-                                srcIndex = get_src_index(i, k, n + o, featureC, featureW, featureH);
-
-                                // multiply srcMatrix pixel value with convVector weight and store the result in dstMatrix
-                                dstMatrix[dstIndex] += convVector[conIndex] * srcMatrix[srcIndex];
 
                             }
 
@@ -298,7 +300,7 @@ extern "C"
     void apply_convolution(
                            double * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
                            double * srcMatrix,  // (batchSize, featureC, featureH * featureW)
-                           double * convVector, // (convC, featureC, featureW * (convH - 1) + convW)
+                           double * convVector, // (convC, featureC, convH, convW)
                            size_t featureH,
                            size_t featureW,
                            size_t featureC,

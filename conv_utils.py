@@ -43,40 +43,10 @@ class ConvTools(object):
         ctypes.c_size_t  # strideW (SW)
     ]
 
-    @staticmethod
-    def __compute_conv_vector(conv_matrix : np.ndarray, W : int, C : int, CC : int, CW : int, CH : int) -> np.ndarray:
-
-        # (CC, C, N)
-        conv_vector = np.zeros(shape = (CC, C, W * (CH - 1) + CW), dtype = np.float64)
-
-        for i in range(CH):
-            conv_vector[..., i * W : i * W + CW] = conv_matrix[..., i, :]
-
-        return conv_vector
-
-    @classmethod
-    def compute_conv_vector(cls, src_matrix : np.ndarray, conv_matrix : np.ndarray) -> np.ndarray:
-
-        if (cls.DEBUG_MODE):
-
-            assert isinstance(src_matrix, np.ndarray)
-
-            assert isinstance(conv_matrix, np.ndarray)
-
-        (B, C, H, W) = src_matrix.shape
-
-        if (conv_matrix.dtype != np.float64):
-            conv_matrix = np.float64(conv_matrix)
-
-        (CC, _, CH, CW) = conv_matrix.shape
-
-        return cls.__compute_conv_vector(conv_matrix, W, C, CC, CW, CH)
-
     @classmethod
     def apply_convolution(cls, src_matrix  : np.ndarray,
                                conv_matrix : np.ndarray,
-                               conv_stride : Tuple[ int, int ], *,
-                               conv_vector : Optional[ np.ndarray ] = None):
+                               conv_stride : Tuple[ int, int ]) -> np.ndarray:
         
         if (cls.DEBUG_MODE):
 
@@ -85,8 +55,6 @@ class ConvTools(object):
             assert isinstance(conv_matrix, np.ndarray)
 
             assert ((isinstance(conv_stride, tuple)) or (isinstance(conv_stride, list)))
-
-            assert ((conv_vector is None) or (isinstance(conv_vector, np.ndarray)))
 
         original_type = src_matrix.dtype
 
@@ -102,15 +70,12 @@ class ConvTools(object):
 
         (CC, _, CH, CW) = conv_matrix.shape
 
-        if (conv_vector is None):
-            conv_vector = cls.__compute_conv_vector(conv_matrix, W, C, CC, CW, CH)
-
         dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = np.float64)
 
         cls.LIBRARY.apply_convolution(
             dst_matrix.ctypes.data,
             src_matrix.ctypes.data,
-            conv_vector.ctypes.data,
+            conv_matrix.ctypes.data,
             H,
             W,
             C,
@@ -207,27 +172,27 @@ def extract_matrices(src_matrix : np.ndarray, kernel_size : tuple, conv_stride :
 
 if (__name__ == "__main__"):
 
-    # 10x10 => 0.00000 sec
-    # 50x50 => 0.00000 sec
-    # 100x100 => 0.001 sec
-    # 500x500 => 0.125 sec
-    # 1000x1000 => 0.9 sec
+    # 10x10 => 0.0000000 sec
+    # 50x50 => 0.0000000 sec
+    # 100x100 => 0.00000 sec
+    # 500x500 => 0.00518 sec
+    # 1000x1000 => 0.018 sec
 
-    BATCH_SIZE = 256
+    BATCH_SIZE = 1
 
-    IMAGE_H = 28
+    IMAGE_H = 100
 
-    IMAGE_W = 28
+    IMAGE_W = 100
 
     IMAGE_C = 1
 
-    CONV_C_OUT = 64
+    CONV_C_OUT = 1
 
     CONV_C_IN = IMAGE_C
 
-    CONV_H = 3
+    CONV_H = 2
 
-    CONV_W = 3
+    CONV_W = 2
 
     STRIDE_H = 1
 
@@ -237,15 +202,13 @@ if (__name__ == "__main__"):
 
     conv_matrix = np.random.randint(-10, 10, (CONV_C_OUT, CONV_C_IN, CONV_H, CONV_W))
 
-    conv_vector = ConvTools.compute_conv_vector(src_matrix, conv_matrix)
-
     conv_stride = (STRIDE_H, STRIDE_W)
 
     from datetime import datetime
 
     SOT = datetime.now()
 
-    dst_matrix = ConvTools.apply_convolution(src_matrix, conv_matrix, conv_stride, conv_vector = conv_vector)
+    dst_matrix = ConvTools.apply_convolution(src_matrix, conv_matrix, conv_stride)
 
     print(f"{(datetime.now() - SOT).total_seconds()} seconds")
 
