@@ -274,6 +274,84 @@ namespace Convolution
 
     }
 
+    void transform_gradient(
+                            double * dstMatrix, // (batchSize, featureC, featureH, featureW)
+                            double * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            double * conMatrix, // (convC, featureC, convH, convW)
+                            size_t batchSize,
+                            size_t featureH,
+                            size_t featureW,
+                            size_t featureC,
+                            size_t convC,
+                            size_t convW,
+                            size_t convH,
+                            size_t featureOutH,
+                            size_t featureOutW,
+                            size_t strideH,
+                            size_t strideW
+                            ) {
+
+        size_t _CI, _CO, _B, _H, _W, _I, _J, __I, __J;
+
+        size_t dstH = (featureH - convH) / strideH + 1;
+
+        size_t dstW = (featureW - convW) / strideW + 1;
+
+        size_t borderI = (featureH - convH) + 1;
+
+        size_t borderJ = (featureW - convW) + 1;
+
+        size_t srcIndex, dstIndex, conIndex;
+
+        for (_CI = 0; _CI < featureC; ++_CI)
+        {
+
+            for (_CO = 0; _CO < convC; ++_CO)
+            {
+
+                for (_B = 0; _B < batchSize; ++_B)
+                {
+
+                    for (_H = 0; _H < borderI; ++_H)
+                    {
+
+                        for (_W = 0; _W < borderJ; ++_W)
+                        {
+
+                            srcIndex = get_dst_index(_B, _CO, _H, _W, convC, dstW, dstH, strideH, strideW);
+
+                            for (_I = 0; _I < convH; ++_I)
+                            {
+
+                                for (_J = 0; _J < convW; ++_J)
+                                {
+
+                                    __I = _H + _I;
+
+                                    __J = _W + _J;
+
+                                    dstIndex = get_src_index(_B, _CI, __I * featureW + __J, featureC, featureW, featureH);
+
+                                    conIndex = get_con_index(_CO, _CI, _I, _J, featureC, convW, convH);
+
+                                    dstMatrix[dstIndex] += (srcMatrix[srcIndex] * conMatrix[conIndex]);
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
 }
 
 extern "C"
@@ -313,6 +391,28 @@ extern "C"
                         ) {
 
         Convolution::apply_convolution(dstMatrix, srcMatrix, convVector, featureH, featureW, featureC, batchSize, convH, convW, convC, strideH, strideW);
+
+    }
+
+    void transform_gradient(
+                            double * dstMatrix, // (batchSize, featureC, featureH, featureW)
+                            double * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            double * conMatrix, // (convC, featureC, convH, convW)
+                            size_t batchSize,
+                            size_t featureH,
+                            size_t featureW,
+                            size_t featureC,
+                            size_t convC,
+                            size_t convW,
+                            size_t convH,
+                            size_t featureOutH,
+                            size_t featureOutW,
+                            size_t strideH,
+                            size_t strideW
+                            ) {
+
+
+        Convolution::transform_gradient(dstMatrix, srcMatrix, conMatrix, batchSize, featureH, featureW, featureC, convC, convW, convH, featureOutH, featureOutW, strideH, strideW);
 
     }
 
