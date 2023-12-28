@@ -14,6 +14,8 @@ class ConvTools(object):
 
     LIBRARY = ctypes.cdll.LoadLibrary(LIBRARY_NAME)
 
+    PARAM_TYPE = np.float32
+
     LIBRARY.extract_matrices.argtypes = [
         ctypes.c_void_p, # dstMatrix
         ctypes.c_void_p, # srcMatrix
@@ -60,6 +62,79 @@ class ConvTools(object):
         ctypes.c_size_t  # strideW (SW)
     ]
 
+    LIBRARY.transform_gradient_for_weights.argtypes = [
+        ctypes.c_void_p, # srcMatrix
+        ctypes.c_void_p, # dstMatrix
+        ctypes.c_void_p, # conMatrix
+        ctypes.c_size_t, # batchSize (B)
+        ctypes.c_size_t, # featureH (H)
+        ctypes.c_size_t, # featureW (W)
+        ctypes.c_size_t, # featureC (C)
+        ctypes.c_size_t, # convC (CC)
+        ctypes.c_size_t, # convW (CW)
+        ctypes.c_size_t, # convH (CH)
+        ctypes.c_size_t, # featureOutH (OW)
+        ctypes.c_size_t, # featureOutW (OH)
+        ctypes.c_size_t, # strideH (SH)
+        ctypes.c_size_t  # strideW (SW)
+    ]
+
+    @classmethod
+    def transform_gradient_for_weights(cls, src_matrix  : np.ndarray,
+                                            dst_matrix  : np.ndarray,
+                                            conv_matrix : np.ndarray,
+                                            conv_stride : Tuple[ int, int ]) -> np.ndarray:
+        
+        if (cls.DEBUG_MODE):
+
+            assert isinstance(src_matrix, np.ndarray)
+
+            assert isinstance(dst_matrix, np.ndarray)
+
+            assert isinstance(conv_matrix, np.ndarray)
+
+            assert isinstance(conv_stride, tuple)
+
+        original_type = conv_matrix.dtype
+
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = cls.PARAM_TYPE(src_matrix)
+
+        if (conv_matrix.dtype != cls.PARAM_TYPE):
+            conv_matrix = cls.PARAM_TYPE(conv_matrix)
+
+        if (dst_matrix.dtype != cls.PARAM_TYPE):
+            dst_matrix = cls.PARAM_TYPE(dst_matrix)
+
+        (SH, SW) = conv_stride
+
+        (CC, C, CH, CW) = conv_matrix.shape
+
+        (B, _, OH, OW) = dst_matrix.shape
+
+        (_, _, H, W) = src_matrix.shape
+
+        conv_gradients = np.zeros_like(conv_matrix, dtype = cls.PARAM_TYPE)
+
+        cls.LIBRARY.transform_gradient_for_weights(
+            src_matrix.ctypes.data,
+            dst_matrix.ctypes.data,
+            conv_gradients.ctypes.data,
+            B,
+            H,
+            W,
+            C,
+            CC,
+            CW,
+            CH,
+            OW,
+            OH,
+            SH,
+            SW
+        )
+
+        return conv_gradients.astype(original_type)
+
     @classmethod
     def transform_gradient(cls, src_matrix  : np.ndarray,
                                 conv_matrix : np.ndarray,
@@ -75,11 +150,11 @@ class ConvTools(object):
 
         original_type = src_matrix.dtype
 
-        if (src_matrix.dtype != np.float64):
-            src_matrix = np.float64(src_matrix)
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = cls.PARAM_TYPE(src_matrix)
 
-        if (conv_matrix.dtype != np.float64):
-            conv_matrix = np.float64(conv_matrix)
+        if (conv_matrix.dtype != cls.PARAM_TYPE):
+            conv_matrix = cls.PARAM_TYPE(conv_matrix)
 
         (SH, SW) = conv_stride
 
@@ -92,7 +167,7 @@ class ConvTools(object):
             SW * (OW - 1) + CW
         )
 
-        dst_matrix = np.zeros(shape = (B, C, H, W), dtype = np.float64)
+        dst_matrix = np.zeros(shape = (B, C, H, W), dtype = cls.PARAM_TYPE)
 
         cls.LIBRARY.transform_gradient(
             dst_matrix.ctypes.data,
@@ -128,11 +203,11 @@ class ConvTools(object):
 
         original_type = src_matrix.dtype
 
-        if (src_matrix.dtype != np.float64):
-            src_matrix = np.float64(src_matrix)
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = cls.PARAM_TYPE(src_matrix)
 
-        if (conv_matrix.dtype != np.float64):
-            conv_matrix = np.float64(conv_matrix)
+        if (conv_matrix.dtype != cls.PARAM_TYPE):
+            conv_matrix = cls.PARAM_TYPE(conv_matrix)
         
         (B, C, H, W) = src_matrix.shape
 
@@ -140,7 +215,7 @@ class ConvTools(object):
 
         (CC, _, CH, CW) = conv_matrix.shape
 
-        dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = np.float64)
+        dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = cls.PARAM_TYPE)
 
         cls.LIBRARY.apply_convolution(
             dst_matrix.ctypes.data,
@@ -183,12 +258,12 @@ class ConvTools(object):
 
         original_type = src_matrix.dtype
 
-        if (src_matrix.dtype != np.float64):
-            src_matrix = np.float64(src_matrix)
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = cls.PARAM_TYPE(src_matrix)
 
         N = (1 + (H - CH) // SH) * (1 + (W - CW) // SW)
 
-        dst_matrix = np.zeros(shape = (B, N, CH, CW, C), dtype = np.float64)
+        dst_matrix = np.zeros(shape = (B, N, CH, CW, C), dtype = cls.PARAM_TYPE)
 
         cls.LIBRARY.extract_matrices(
             dst_matrix.ctypes.data,
@@ -248,15 +323,15 @@ if (__name__ == "__main__"):
     # 500x500 => 0.00518 sec
     # 1000x1000 => 0.018 sec
 
-    BATCH_SIZE = 128
+    BATCH_SIZE = 1
 
     IMAGE_H = 24
 
     IMAGE_W = 24
 
-    IMAGE_C = 64
+    IMAGE_C = 128
 
-    CONV_C_OUT = 128
+    CONV_C_OUT = 256
 
     CONV_C_IN = IMAGE_C
 
@@ -290,6 +365,10 @@ if (__name__ == "__main__"):
 
     gradient = ConvTools.transform_gradient(dst_matrix, conv_matrix, conv_stride)
 
-    print(f"Backward: {(datetime.now() - SOT).total_seconds()} seconds")
+    print(f"Backward 1 (X): {(datetime.now() - SOT).total_seconds()} seconds, Shape: {gradient.shape}")
 
-    print(gradient.shape)
+    SOT = datetime.now()
+
+    gradient = ConvTools.transform_gradient_for_weights(src_matrix, dst_matrix, conv_matrix, conv_stride)
+
+    print(f"Backward 2 (W): {(datetime.now() - SOT).total_seconds()} seconds, Shape: {gradient.shape}")

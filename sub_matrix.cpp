@@ -2,6 +2,8 @@
 
 using namespace std;
 
+typedef float PARAM_TYPE;
+
 namespace SubMatrixExtraction
 {
 
@@ -37,8 +39,8 @@ namespace SubMatrixExtraction
     }
 
     void extract_sub_matrix(
-                            double * dstMatrix, // (batchSize, partialN, convH, convW, featureC)
-                            double * srcMatrix, // (batchSize, featureH, featureW, featureC)
+                            PARAM_TYPE * dstMatrix, // (batchSize, partialN, convH, convW, featureC)
+                            PARAM_TYPE * srcMatrix, // (batchSize, featureH, featureW, featureC)
                             size_t featureH,
                             size_t featureW,
                             size_t featureC,
@@ -180,9 +182,9 @@ namespace Convolution
     }
 
     void apply_convolution(
-                           double * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
-                           double * srcMatrix,  // (batchSize, featureC, featureH * featureW)
-                           double * convVector, // (convC, featureC, convH, convW)
+                           PARAM_TYPE * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
+                           PARAM_TYPE * srcMatrix,  // (batchSize, featureC, featureH * featureW)
+                           PARAM_TYPE * convVector, // (convC, featureC, convH, convW)
                            size_t featureH,
                            size_t featureW,
                            size_t featureC,
@@ -275,9 +277,9 @@ namespace Convolution
     }
 
     void transform_gradient(
-                            double * dstMatrix, // (batchSize, featureC, featureH, featureW)
-                            double * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
-                            double * conMatrix, // (convC, featureC, convH, convW)
+                            PARAM_TYPE * dstMatrix, // (batchSize, featureC, featureH, featureW)
+                            PARAM_TYPE * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            PARAM_TYPE * conMatrix, // (convC, featureC, convH, convW)
                             size_t batchSize,
                             size_t featureH,
                             size_t featureW,
@@ -312,18 +314,18 @@ namespace Convolution
                 for (_B = 0; _B < batchSize; ++_B)
                 {
 
-                    for (_H = 0; _H < borderI; ++_H)
+                    for (_H = 0; _H < borderI; _H += strideH)
                     {
 
-                        for (_W = 0; _W < borderJ; ++_W)
+                        for (_W = 0; _W < borderJ; _W += strideW)
                         {
 
                             srcIndex = get_dst_index(_B, _CO, _H, _W, convC, dstW, dstH, strideH, strideW);
 
-                            for (_I = 0; _I < convH; ++_I)
+                            for (_J = 0; _J < convW; ++_J)
                             {
 
-                                for (_J = 0; _J < convW; ++_J)
+                                for (_I = 0; _I < convH; ++_I)
                                 {
 
                                     __I = _H + _I;
@@ -352,14 +354,127 @@ namespace Convolution
 
     }
 
+    void transform_gradient_for_weights(
+                            PARAM_TYPE * dstMatrix, // (batchSize, featureC, featureH, featureW)
+                            PARAM_TYPE * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            PARAM_TYPE * conMatrix, // (convC, featureC, convH, convW)
+                            size_t batchSize,
+                            size_t featureH,
+                            size_t featureW,
+                            size_t featureC,
+                            size_t convC,
+                            size_t convW,
+                            size_t convH,
+                            size_t featureOutH,
+                            size_t featureOutW,
+                            size_t strideH,
+                            size_t strideW
+                            ) {
+
+        size_t _CI, _CO, _B, _H, _W, _I, _J, __I, __J;
+
+        size_t dstH = (featureH - convH) / strideH + 1;
+
+        size_t dstW = (featureW - convW) / strideW + 1;
+
+        size_t borderI = (featureH - convH) + 1;
+
+        size_t borderJ = (featureW - convW) + 1;
+
+        size_t srcIndex, dstIndex, conIndex;
+
+        for (_CI = 0; _CI < featureC; ++_CI)
+        {
+
+            for (_CO = 0; _CO < convC; ++_CO)
+            {
+
+                for (_B = 0; _B < batchSize; ++_B)
+                {
+
+                    for (_H = 0; _H < borderI; _H += strideH)
+                    {
+
+                        for (_W = 0; _W < borderJ; _W += strideW)
+                        {
+
+                            srcIndex = get_dst_index(_B, _CO, _H, _W, convC, dstW, dstH, strideH, strideW);
+
+                            for (_J = 0; _J < convW; ++_J)
+                            {
+
+                                for (_I = 0; _I < convH; ++_I)
+                                {
+
+                                    __I = _H + _I;
+
+                                    __J = _W + _J;
+
+                                    dstIndex = get_src_index(_B, _CI, __I * featureW + __J, featureC, featureW, featureH);
+
+                                    conIndex = get_con_index(_CO, _CI, _I, _J, featureC, convW, convH);
+
+                                    conMatrix[conIndex] += (srcMatrix[srcIndex] * dstMatrix[dstIndex]);
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+
+
+                    /*
+                    for (_J = 0; _J < convW; ++_J)
+                    {
+
+                        for (_I = 0; _I < convH; ++_I)
+                        {
+
+                            conIndex = get_con_index(_CO, _CI, _I, _J, featureC, convW, convH);
+
+                            for (_W = 0; _W < borderJ; _W += strideW)
+                            {
+
+                                for (_H = 0; _H < borderI; _H += strideH)
+                                {
+
+                                    __I = _H + _I;
+
+                                    __J = _W + _J;
+
+                                    dstIndex = get_src_index(_B, _CI, __I * featureW + __J, featureC, featureW, featureH);
+
+                                    srcIndex = get_dst_index(_B, _CO, _H, _W, convC, dstW, dstH, strideH, strideW);
+
+                                    conMatrix[conIndex] += (srcMatrix[srcIndex] * dstMatrix[dstIndex]);
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+                    */
+
+                }
+
+            }
+
+        }
+
+    }
+
 }
 
 extern "C"
 {
 
     void extract_matrices(
-                        double * dstMatrix, // (batchSize, partialN, convH, convW, featureC)
-                        double * srcMatrix, // (batchSize, featureH, featureW, featureC)
+                        PARAM_TYPE * dstMatrix, // (batchSize, partialN, convH, convW, featureC)
+                        PARAM_TYPE * srcMatrix, // (batchSize, featureH, featureW, featureC)
                         size_t featureH,
                         size_t featureW,
                         size_t featureC,
@@ -376,9 +491,9 @@ extern "C"
     }
 
     void apply_convolution(
-                           double * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
-                           double * srcMatrix,  // (batchSize, featureC, featureH * featureW)
-                           double * convVector, // (convC, featureC, convH, convW)
+                           PARAM_TYPE * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
+                           PARAM_TYPE * srcMatrix,  // (batchSize, featureC, featureH * featureW)
+                           PARAM_TYPE * convVector, // (convC, featureC, convH, convW)
                            size_t featureH,
                            size_t featureW,
                            size_t featureC,
@@ -395,9 +510,9 @@ extern "C"
     }
 
     void transform_gradient(
-                            double * dstMatrix, // (batchSize, featureC, featureH, featureW)
-                            double * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
-                            double * conMatrix, // (convC, featureC, convH, convW)
+                            PARAM_TYPE * dstMatrix, // (batchSize, featureC, featureH, featureW)
+                            PARAM_TYPE * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            PARAM_TYPE * conMatrix, // (convC, featureC, convH, convW)
                             size_t batchSize,
                             size_t featureH,
                             size_t featureW,
@@ -413,6 +528,27 @@ extern "C"
 
 
         Convolution::transform_gradient(dstMatrix, srcMatrix, conMatrix, batchSize, featureH, featureW, featureC, convC, convW, convH, featureOutH, featureOutW, strideH, strideW);
+
+    }
+
+    void transform_gradient_for_weights(
+                            PARAM_TYPE * srcMatrix, // (batchSize, featureC, featureH, featureW)
+                            PARAM_TYPE * dstMatrix, // (batchSize, convC, featureOutH, featureOutW)
+                            PARAM_TYPE * conMatrix, // (convC, featureC, convH, convW)
+                            size_t batchSize,
+                            size_t featureH,
+                            size_t featureW,
+                            size_t featureC,
+                            size_t convC,
+                            size_t convW,
+                            size_t convH,
+                            size_t featureOutH,
+                            size_t featureOutW,
+                            size_t strideH,
+                            size_t strideW
+                            ) {
+
+        Convolution::transform_gradient_for_weights(srcMatrix, dstMatrix, conMatrix, batchSize, featureH, featureW, featureC, convC, convW, convH, featureOutH, featureOutW, strideH, strideW);
 
     }
 
