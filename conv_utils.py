@@ -1,5 +1,7 @@
 from typing import *
 
+from threading_utils import MultiThreadWorker
+
 import numpy as np
 
 import platform
@@ -91,7 +93,8 @@ class ConvTools(object):
     def transform_gradient_for_weights(cls, src_matrix  : np.ndarray,
                                             dst_matrix  : np.ndarray,
                                             conv_matrix : np.ndarray,
-                                            conv_stride : Tuple[ int, int ]) -> np.ndarray:
+                                            conv_stride : Tuple[ int, int ], *,
+                                            num_workers : Optional[ int ] = 4) -> np.ndarray:
         
         if (cls.DEBUG_MODE):
 
@@ -103,7 +106,9 @@ class ConvTools(object):
 
             assert isinstance(conv_stride, tuple)
 
-        original_type = conv_matrix.dtype
+            assert isinstance(num_workers, int)
+
+            assert num_workers > 0
 
         if (src_matrix.dtype != cls.PARAM_TYPE):
             src_matrix = cls.PARAM_TYPE(src_matrix)
@@ -114,31 +119,51 @@ class ConvTools(object):
         if (dst_matrix.dtype != cls.PARAM_TYPE):
             dst_matrix = cls.PARAM_TYPE(dst_matrix)
 
-        (SH, SW) = conv_stride
+        (*_, CH, CW) = conv_matrix.shape
 
-        (CC, C, CH, CW) = conv_matrix.shape
+        def process_data(dst_matrix  : np.ndarray, 
+                         src_matrix  : np.ndarray, 
+                         conv_stride : Tuple[ int, int ], 
+                         CH          : int,
+                         CW          : int) -> np.ndarray:
 
-        (B, _, OH, OW) = dst_matrix.shape
+            (B, CC, OH, OW) = dst_matrix.shape
 
-        (_, _, H, W) = src_matrix.shape
+            (_, C, H, W) = src_matrix.shape
 
-        conv_gradients = np.zeros_like(conv_matrix, dtype = cls.PARAM_TYPE)
+            (SH, SW) = conv_stride
 
-        cls.LIBRARY.transform_gradient_for_weights(
-            src_matrix.ctypes.data,
-            dst_matrix.ctypes.data,
-            conv_gradients.ctypes.data,
-            B,
-            H,
-            W,
-            C,
-            CC,
-            CW,
-            CH,
-            OW,
-            OH,
-            SH,
-            SW
+            conv_gradients = np.zeros(shape = (CC, C, CH, CW), dtype = cls.PARAM_TYPE)
+
+            cls.LIBRARY.transform_gradient_for_weights(
+                src_matrix.ctypes.data,
+                dst_matrix.ctypes.data,
+                conv_gradients.ctypes.data,
+                B,
+                H,
+                W,
+                C,
+                CC,
+                CW,
+                CH,
+                OW,
+                OH,
+                SH,
+                SW
+            )
+
+            return conv_gradients
+        
+        multi_thread_worker = MultiThreadWorker(num_workers, process_data)
+
+        conv_gradients = multi_thread_worker.process(
+            dst_matrix, 
+            src_matrix, 
+            conv_stride, 
+            CH, 
+            CW, 
+            divide_axis = 1, 
+            concat_axis = 0
         )
 
         return conv_gradients
@@ -146,7 +171,8 @@ class ConvTools(object):
     @classmethod
     def transform_gradient(cls, src_matrix  : np.ndarray,
                                 conv_matrix : np.ndarray,
-                                conv_stride : Tuple[ int, int ]) -> np.ndarray:
+                                conv_stride : Tuple[ int, int ], *,
+                                num_workers : Optional[ int ] = 4) -> np.ndarray:
         
         if (cls.DEBUG_MODE):
 
@@ -156,7 +182,9 @@ class ConvTools(object):
 
             assert ((isinstance(conv_stride, tuple)) or (isinstance(conv_stride, list)))
 
-        original_type = src_matrix.dtype
+            assert isinstance(num_workers, int)
+
+            assert num_workers > 0
 
         if (src_matrix.dtype != cls.PARAM_TYPE):
             src_matrix = cls.PARAM_TYPE(src_matrix)
@@ -164,34 +192,50 @@ class ConvTools(object):
         if (conv_matrix.dtype != cls.PARAM_TYPE):
             conv_matrix = cls.PARAM_TYPE(conv_matrix)
 
-        (SH, SW) = conv_stride
+        def process_data(src_matrix  : np.ndarray,
+                         conv_matrix : np.ndarray,
+                         conv_stride : Tuple[ int, int ]) -> np.ndarray:
+            
+            (SH, SW)        = conv_stride
 
-        (CC, C, CH, CW) = conv_matrix.shape
+            (CC, C, CH, CW) = conv_matrix.shape
 
-        (B, _, OH, OW) = src_matrix.shape
+            (B, _, OH, OW)  = src_matrix.shape
 
-        (H, W) = (
-            SH * (OH - 1) + CH,
-            SW * (OW - 1) + CW
-        )
+            (H, W) = (
+                SH * (OH - 1) + CH,
+                SW * (OW - 1) + CW
+            )
 
-        dst_matrix = np.zeros(shape = (B, C, H, W), dtype = cls.PARAM_TYPE)
+            dst_matrix = np.zeros(shape = (B, C, H, W), dtype = cls.PARAM_TYPE)
 
-        cls.LIBRARY.transform_gradient(
-            dst_matrix.ctypes.data,
-            src_matrix.ctypes.data,
-            conv_matrix.ctypes.data,
-            B,
-            H,
-            W,
-            C,
-            CC,
-            CW,
-            CH,
-            OW,
-            OH,
-            SH,
-            SW
+            cls.LIBRARY.transform_gradient(
+                dst_matrix.ctypes.data,
+                src_matrix.ctypes.data,
+                conv_matrix.ctypes.data,
+                B,
+                H,
+                W,
+                C,
+                CC,
+                CW,
+                CH,
+                OW,
+                OH,
+                SH,
+                SW
+            )
+
+            return dst_matrix
+        
+        multi_thread_worker = MultiThreadWorker(num_workers, process_data)
+
+        dst_matrix = multi_thread_worker.process(
+            src_matrix, 
+            conv_matrix, 
+            conv_stride, 
+            divide_axis = 0, 
+            concat_axis = 0
         )
 
         return dst_matrix
@@ -199,7 +243,8 @@ class ConvTools(object):
     @classmethod
     def apply_convolution(cls, src_matrix  : np.ndarray,
                                conv_matrix : np.ndarray,
-                               conv_stride : Tuple[ int, int ]) -> np.ndarray:
+                               conv_stride : Tuple[ int, int ], *,
+                               num_workers : Optional[ int ] = 4) -> np.ndarray:
         
         if (cls.DEBUG_MODE):
 
@@ -209,36 +254,44 @@ class ConvTools(object):
 
             assert ((isinstance(conv_stride, tuple)) or (isinstance(conv_stride, list)))
 
-        original_type = src_matrix.dtype
-
         if (src_matrix.dtype != cls.PARAM_TYPE):
             src_matrix = cls.PARAM_TYPE(src_matrix)
 
         if (conv_matrix.dtype != cls.PARAM_TYPE):
             conv_matrix = cls.PARAM_TYPE(conv_matrix)
         
-        (B, C, H, W) = src_matrix.shape
+        def process_data(src_matrix  : np.ndarray,
+                         conv_matrix : np.ndarray,
+                         conv_stride : Tuple[ int, int ]) -> np.ndarray:
+            
+            (B, C, H, W) = src_matrix.shape
 
-        (SH, SW) = conv_stride
+            (SH, SW) = conv_stride
 
-        (CC, _, CH, CW) = conv_matrix.shape
+            (CC, _, CH, CW) = conv_matrix.shape
 
-        dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = cls.PARAM_TYPE)
+            dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = cls.PARAM_TYPE)
 
-        cls.LIBRARY.apply_convolution(
-            dst_matrix.ctypes.data,
-            src_matrix.ctypes.data,
-            conv_matrix.ctypes.data,
-            H,
-            W,
-            C,
-            B,
-            CH,
-            CW,
-            CC,
-            SH,
-            SW
-        )
+            cls.LIBRARY.apply_convolution(
+                dst_matrix.ctypes.data,
+                src_matrix.ctypes.data,
+                conv_matrix.ctypes.data,
+                H,
+                W,
+                C,
+                B,
+                CH,
+                CW,
+                CC,
+                SH,
+                SW
+            )
+
+            return dst_matrix
+
+        multi_thread_worker = MultiThreadWorker(num_workers, process_data)
+
+        dst_matrix = multi_thread_worker.process(src_matrix, conv_matrix, conv_stride, divide_axis = 0, concat_axis = 0)
 
         return dst_matrix
 
@@ -331,7 +384,9 @@ if (__name__ == "__main__"):
     # 500x500 => 0.00518 sec
     # 1000x1000 => 0.018 sec
 
-    BATCH_SIZE = 1
+    NUM_WORKERS = 8
+
+    BATCH_SIZE = 32
 
     IMAGE_H = 24
 
@@ -361,7 +416,7 @@ if (__name__ == "__main__"):
 
     SOT = datetime.now()
 
-    dst_matrix = ConvTools.apply_convolution(src_matrix, conv_matrix, conv_stride)
+    dst_matrix = ConvTools.apply_convolution(src_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
 
     print(f"Forward: {(datetime.now() - SOT).total_seconds()} seconds")
 
@@ -371,12 +426,12 @@ if (__name__ == "__main__"):
 
     SOT = datetime.now()
 
-    gradient = ConvTools.transform_gradient(dst_matrix, conv_matrix, conv_stride)
+    gradient = ConvTools.transform_gradient(dst_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
 
     print(f"Backward 1 (X): {(datetime.now() - SOT).total_seconds()} seconds, Shape: {gradient.shape}")
 
     SOT = datetime.now()
 
-    gradient = ConvTools.transform_gradient_for_weights(src_matrix, dst_matrix, conv_matrix, conv_stride)
+    gradient = ConvTools.transform_gradient_for_weights(src_matrix, dst_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
 
     print(f"Backward 2 (W): {(datetime.now() - SOT).total_seconds()} seconds, Shape: {gradient.shape}")
