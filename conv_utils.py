@@ -2,6 +2,8 @@ from typing import *
 
 import numpy as np
 
+import platform
+
 import ctypes 
 
 import os
@@ -10,7 +12,13 @@ class ConvTools(object):
 
     DEBUG_MODE = True
 
-    LIBRARY_NAME = os.path.join(os.path.dirname(__file__), "conv.dll")
+    LIBRARY_NAME_WINDOWS = "bin/conv_lib_windows.dll"
+
+    LIBRARY_NAME_LINUX   = "bin/conv_lib_linux.so"
+
+    LIBRARY_NAME = ((LIBRARY_NAME_WINDOWS) if (platform.system() == "Windows") else (LIBRARY_NAME_LINUX))
+
+    LIBRARY_NAME = os.path.join(os.path.dirname(__file__), LIBRARY_NAME)
 
     LIBRARY = ctypes.cdll.LoadLibrary(LIBRARY_NAME)
 
