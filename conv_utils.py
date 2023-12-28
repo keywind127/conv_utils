@@ -141,7 +141,7 @@ class ConvTools(object):
             SW
         )
 
-        return conv_gradients.astype(original_type)
+        return conv_gradients
 
     @classmethod
     def transform_gradient(cls, src_matrix  : np.ndarray,
@@ -194,7 +194,7 @@ class ConvTools(object):
             SW
         )
 
-        return dst_matrix.astype(original_type)
+        return dst_matrix
 
     @classmethod
     def apply_convolution(cls, src_matrix  : np.ndarray,
@@ -240,7 +240,7 @@ class ConvTools(object):
             SW
         )
 
-        return dst_matrix.astype(original_type)
+        return dst_matrix
 
     @classmethod
     def extract_matrices(cls, src_matrix  : np.ndarray, 
@@ -287,7 +287,7 @@ class ConvTools(object):
             SW  # col stride
         )
 
-        return dst_matrix.astype(original_type)
+        return dst_matrix
     
 def extract_matrices(src_matrix : np.ndarray, kernel_size : tuple, conv_stride : tuple) -> np.ndarray:
 

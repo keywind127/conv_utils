@@ -238,13 +238,13 @@ namespace Convolution
                         {
 
                             // calculate 1D index equivalent of (L, M)
-                            n = l * featureW + m;
+                            // n = l * featureW + m;
 
                             // calculate dstMatrix index
                             dstIndex = get_dst_index(i, j, l, m, convC, dstW, dstH, strideH, strideW);
 
                             // initialize dstMatrix index position with 0
-                            dstMatrix[dstIndex] = 0;
+                            // dstMatrix[dstIndex] = 0;
 
                             for (p = 0; p < convH; ++p)
                             {
@@ -258,7 +258,7 @@ namespace Convolution
 
                                     conIndex = get_con_index(j, k, p, q, featureC, convW, convH);
 
-                                    dstMatrix[dstIndex] += convVector[conIndex] * srcMatrix[srcIndex];
+                                    dstMatrix[dstIndex] += (convVector[conIndex] * srcMatrix[srcIndex]);
 
                                 }
 
