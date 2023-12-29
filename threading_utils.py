@@ -68,4 +68,19 @@ class MultiThreadWorker(object):
         for thread in reversed(threads):
             thread.join()
 
+        if not (isinstance(processed_data[0], np.ndarray)):
+
+            # [ (A1, B1), (A2, B2), (A3, B3), ... ]
+
+            processed_data = list(zip(*processed_data))
+
+            # ( [A1, A2, A3, ... ], [B1, B2, B3, ... ] )
+
+            return [
+                np.concatenate(processed_data[index], axis = concat_axis)
+                    for index in range(len(processed_data))
+            ]
+        
+        # [ A1, A2, A3, ... ]
+
         return np.concatenate(processed_data, axis = concat_axis)

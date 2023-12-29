@@ -89,6 +89,81 @@ class ConvTools(object):
         ctypes.c_size_t  # strideW (SW)
     ]
 
+    LIBRARY.max_pooling_2D.argtypes = [
+        ctypes.c_void_p, # dstMatrix
+        ctypes.c_void_p, # binMatrix
+        ctypes.c_void_p, # srcMatrix
+        ctypes.c_size_t, # batchSize (B)
+        ctypes.c_size_t, # featureC (C)
+        ctypes.c_size_t, # featureH (H)
+        ctypes.c_size_t, # featureW (W)
+        ctypes.c_size_t, # featureOutH (OH),
+        ctypes.c_size_t, # featureOutW (OW),
+        ctypes.c_size_t, # poolH (PH)
+        ctypes.c_size_t  # poolW (PW)
+    ]
+
+    @classmethod
+    def max_pooling_2D(cls, src_matrix  : np.ndarray,
+                            pool_size   : Tuple[ int, int ], *,
+                            num_workers : Optional[ int ] = 4
+                            
+            ) -> Tuple[ np.ndarray, np.ndarray ]:
+        
+        if (cls.DEBUG_MODE):
+
+            assert isinstance(src_matrix, np.ndarray)
+
+            assert ((isinstance(pool_size, tuple)) or (isinstance(pool_size, list)))
+
+            assert isinstance(num_workers, int)
+
+            assert num_workers > 0
+        
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = src_matrix.astype(cls.PARAM_TYPE)
+
+        def process_data(src_matrix : np.ndarray,
+                         pool_size  : Tuple[ int, int ]
+                ) -> Tuple[ np.ndarray ]:
+
+            (B, C, H, W) = src_matrix.shape
+
+            (PH, PW) = pool_size
+
+            (OH, OW) = (
+                H // PH,
+                W // PW
+            )
+
+            print(OH, OW)
+
+            dst_matrix = np.zeros(shape = (B, C, OH, OW), dtype = cls.PARAM_TYPE)
+
+            bin_matrix = np.zeros_like(src_matrix, dtype = cls.PARAM_TYPE)
+
+            cls.LIBRARY.max_pooling_2D(
+                dst_matrix.ctypes.data,
+                bin_matrix.ctypes.data,
+                src_matrix.ctypes.data,
+                B,
+                C,
+                H,
+                W,
+                OH,
+                OW,
+                PH,
+                PW
+            )
+
+            return (dst_matrix, bin_matrix)
+        
+        multi_thread_worker = MultiThreadWorker(num_workers, process_data)
+
+        (dst_matrix, bin_matrix) = multi_thread_worker.process(src_matrix, pool_size, divide_axis = 0, concat_axis = 0)
+
+        return (dst_matrix, bin_matrix)
+
     @classmethod
     def transform_gradient_for_weights(cls, src_matrix  : np.ndarray,
                                             dst_matrix  : np.ndarray,
@@ -435,3 +510,22 @@ if (__name__ == "__main__"):
     gradient = ConvTools.transform_gradient_for_weights(src_matrix, dst_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
 
     print(f"Backward 2 (W): {(datetime.now() - SOT).total_seconds()} seconds, Shape: {gradient.shape}")
+
+    array = np.array([
+        [ 
+            [
+                [ 1, 3, 2, 5, 1 ],
+                [ 3, 5, 1, 3, 2 ],
+                [ 5, 6, 3, 2, 4 ],
+                [ 8, 5, 6, 3, 4 ]
+            ]
+        ]
+    ])
+
+    print(array.shape)
+
+    dst_matrix, bin_matrix = ConvTools.max_pooling_2D(array, (2, 2), num_workers = 4)
+
+    print(dst_matrix)
+
+    print(bin_matrix)
