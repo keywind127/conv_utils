@@ -6,9 +6,9 @@
 
 typedef float PARAM_TYPE;
 
-constexpr auto MAX_PARAM_VALUE = std::numeric_limits<float>::max();
+constexpr auto MAX_PARAM_VALUE = std::numeric_limits<PARAM_TYPE>::max();
 
-constexpr auto MIN_PARAM_VALUE = std::numeric_limits<float>::min();
+constexpr auto MIN_PARAM_VALUE = std::numeric_limits<PARAM_TYPE>::min();
 
 #define H_PARAMETERS
 

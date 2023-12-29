@@ -60,6 +60,8 @@ namespace Pooling
 
                         maxValue = MIN_PARAM_VALUE;
 
+                        maxIndex = get_matrix_index(_B, _C, _H, _W, featureW, featureH, featureC);
+
                         for (i = 0; i < poolH; ++i)
                         {
 
@@ -70,7 +72,7 @@ namespace Pooling
 
                                 tmpValue = srcMatrix[tmpIndex];
 
-                                if (tmpValue >= maxValue)
+                                if ((maxValue == MIN_PARAM_VALUE) || (tmpValue > maxValue))
                                 {
 
                                     maxValue = tmpValue;

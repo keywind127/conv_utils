@@ -136,8 +136,6 @@ class ConvTools(object):
                 W // PW
             )
 
-            print(OH, OW)
-
             dst_matrix = np.zeros(shape = (B, C, OH, OW), dtype = cls.PARAM_TYPE)
 
             bin_matrix = np.zeros_like(src_matrix, dtype = cls.PARAM_TYPE)
@@ -522,10 +520,12 @@ if (__name__ == "__main__"):
         ]
     ])
 
+    array = np.random.randint(0, 10, size = (60000, 3, 26, 26)).astype(np.float32)
+
     print(array.shape)
 
     dst_matrix, bin_matrix = ConvTools.max_pooling_2D(array, (2, 2), num_workers = 4)
 
-    print(dst_matrix)
+    print(dst_matrix.shape)
 
     print(bin_matrix)
