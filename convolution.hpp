@@ -50,6 +50,136 @@ namespace Convolution
 
     }
 
+    void apply_convolution_2(
+                             PARAM_TYPE * dstMatrix, // (BS, OC, OH, OW)
+                             PARAM_TYPE * srcMatrix, // (BS, IC, IH, IW)
+                             PARAM_TYPE * conMatrix, // (OC, IC, CH, CW)
+                             size_t batchSize,
+                             size_t outChannels,
+                             size_t inChannels,
+                             size_t imageHeight,
+                             size_t imageWidth,
+                             size_t convHeight,
+                             size_t convWidth,
+                             size_t strideHeight,
+                             size_t strideWidth) {
+
+        // border of source image height given kernel height (exclusive)
+        size_t borderIH = imageHeight - convHeight + 1;
+
+        // border of source image width given kernel width (exclusive)
+        size_t borderIW = imageWidth - convWidth + 1;
+
+
+        // height of output feature map given kernel height and vertical stride
+        size_t outHeight = (imageHeight - convHeight) / strideHeight + 1;
+
+        // width of output feature map given kernel width and horizontal stride
+        size_t outWidth  = (imageWidth - convWidth) / strideWidth + 1;
+
+
+        // product of OH, OW
+        size_t prod_OH_OW = outHeight * outWidth;
+
+        // product of IH, IW
+        size_t prod_IH_IW = imageHeight * imageWidth;
+
+        // product of CH, CW
+        size_t prod_CH_CW = convHeight * convWidth;
+
+
+        // product of IC, IH, IW
+        size_t prod_IC_IH_IW = inChannels * imageHeight * imageWidth;
+
+        // product of OC, OH, OW
+        size_t prod_OC_OH_OW = outChannels * prod_OH_OW;
+
+        // product of IC, CH, CW
+        size_t prod_IC_CH_CW = inChannels * prod_CH_CW;
+
+
+        for (size_t BS = 0; BS < batchSize; ++BS)
+        {
+
+            //
+            size_t srcIndex_BS = BS * prod_IC_IH_IW;
+
+            //
+            size_t dstIndex_BS = BS * prod_OC_OH_OW;
+
+            for (size_t OC = 0; OC < outChannels; ++OC)
+            {
+
+                //
+                size_t dstIndex_OC = dstIndex_BS + OC * prod_OH_OW;
+
+                //
+                size_t conIndex_OC = OC * prod_IC_CH_CW;
+
+                for (size_t IC = 0; IC < inChannels; ++IC)
+                {
+
+                    //
+                    size_t srcIndex_IC = srcIndex_BS + IC * prod_IH_IW;
+
+                    //
+                    size_t conIndex_IC = conIndex_OC + IC * prod_CH_CW;
+
+                    for (size_t IH = 0, OH = 0; IH < borderIH; IH += strideHeight, OH += 1)
+                    {
+
+                        //
+                        size_t srcIndex_IH = srcIndex_IC + IH * imageWidth;
+
+                        //
+                        size_t dstIndex_OH = dstIndex_OC + OH * outWidth;
+
+                        for (size_t IW = 0, OW = 0; IW < borderIW; IW += strideWidth, OW += 1)
+                        {
+
+                            //
+                            size_t srcIndex_IW = srcIndex_IH + IW;
+
+                            //
+                            size_t dstIndex_OW = dstIndex_OH + OW;
+
+                            //
+                            PARAM_TYPE tempValue = 0;
+
+                            for (size_t CH = 0; CH < convHeight; ++CH)
+                            {
+
+                                //
+                                size_t srcIndex_CH = srcIndex_IW + CH * imageWidth;
+
+                                //
+                                size_t conIndex_CH = conIndex_IC + CH * convWidth;
+
+                                for (size_t CW = 0; CW < convWidth; ++CW)
+                                {
+
+                                    //
+                                    tempValue += srcMatrix[srcIndex_CH + CW] * conMatrix[conIndex_CH + CW];
+
+                                }
+
+                            }
+
+                            //
+                            dstMatrix[dstIndex_OW] = tempValue;
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
     void apply_convolution(
                            PARAM_TYPE * dstMatrix,  // (batchSize, convC, (featureH - convH) / strideH + 1, (featureW - convW) / strideW + 1)
                            PARAM_TYPE * srcMatrix,  // (batchSize, featureC, featureH * featureW)

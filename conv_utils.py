@@ -55,6 +55,21 @@ class ConvTools(object):
         ctypes.c_size_t  # strideW (SW)
     ]
 
+    LIBRARY.apply_convolution_2.argtypes = [
+        ctypes.c_void_p, # dstMatrix
+        ctypes.c_void_p, # srcMatrix
+        ctypes.c_void_p, # convVector
+        ctypes.c_size_t, # featureH (H)
+        ctypes.c_size_t, # featureW (W)
+        ctypes.c_size_t, # featureC (C)
+        ctypes.c_size_t, # batchSize (B)
+        ctypes.c_size_t, # convH (CH)
+        ctypes.c_size_t, # convW (CW)
+        ctypes.c_size_t, # convC (CC)
+        ctypes.c_size_t, # strideH (SH)
+        ctypes.c_size_t  # strideW (SW)
+    ]
+
     LIBRARY.transform_gradient.argtypes = [
         ctypes.c_void_p, # dstMatrix
         ctypes.c_void_p, # srcMatrix
@@ -367,6 +382,61 @@ class ConvTools(object):
         dst_matrix = multi_thread_worker.process(src_matrix, conv_matrix, conv_stride, divide_axis = 0, concat_axis = 0)
 
         return dst_matrix
+    
+    @classmethod
+    def apply_convolution_2(cls, src_matrix  : np.ndarray,
+                                 conv_matrix : np.ndarray,
+                                 conv_stride : Tuple[ int, int ], *,
+                                 num_workers : Optional[ int ] = 4) -> np.ndarray:
+        
+        if (cls.DEBUG_MODE):
+
+            assert isinstance(src_matrix, np.ndarray)
+
+            assert isinstance(conv_matrix, np.ndarray)
+
+            assert ((isinstance(conv_stride, tuple)) or (isinstance(conv_stride, list)))
+
+        if (src_matrix.dtype != cls.PARAM_TYPE):
+            src_matrix = cls.PARAM_TYPE(src_matrix)
+
+        if (conv_matrix.dtype != cls.PARAM_TYPE):
+            conv_matrix = cls.PARAM_TYPE(conv_matrix)
+        
+        def process_data(src_matrix  : np.ndarray,
+                         conv_matrix : np.ndarray,
+                         conv_stride : Tuple[ int, int ]) -> np.ndarray:
+            
+            (B, C, H, W) = src_matrix.shape
+
+            (SH, SW) = conv_stride
+
+            (CC, _, CH, CW) = conv_matrix.shape
+
+            dst_matrix = np.zeros(shape = (B, CC, (H - CH) // SH + 1, (W - CW) // SW + 1), dtype = cls.PARAM_TYPE)
+
+            cls.LIBRARY.apply_convolution(
+                dst_matrix.ctypes.data,
+                src_matrix.ctypes.data,
+                conv_matrix.ctypes.data,
+                H,
+                W,
+                C,
+                B,
+                CH,
+                CW,
+                CC,
+                SH,
+                SW
+            )
+
+            return dst_matrix
+
+        multi_thread_worker = MultiThreadWorker(num_workers, process_data)
+
+        dst_matrix = multi_thread_worker.process(src_matrix, conv_matrix, conv_stride, divide_axis = 0, concat_axis = 0)
+
+        return dst_matrix
 
     @classmethod
     def extract_matrices(cls, src_matrix  : np.ndarray, 
@@ -457,13 +527,13 @@ if (__name__ == "__main__"):
     # 500x500 => 0.00518 sec
     # 1000x1000 => 0.018 sec
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 4
 
     BATCH_SIZE = 32
 
-    IMAGE_H = 24
+    IMAGE_H = 32
 
-    IMAGE_W = 24
+    IMAGE_W = 32
 
     IMAGE_C = 128
 
@@ -490,6 +560,12 @@ if (__name__ == "__main__"):
     SOT = datetime.now()
 
     dst_matrix = ConvTools.apply_convolution(src_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
+
+    print(f"Forward: {(datetime.now() - SOT).total_seconds()} seconds")
+
+    SOT = datetime.now()
+
+    dst_matrix = ConvTools.apply_convolution_2(src_matrix, conv_matrix, conv_stride, num_workers = NUM_WORKERS)
 
     print(f"Forward: {(datetime.now() - SOT).total_seconds()} seconds")
 
@@ -528,4 +604,4 @@ if (__name__ == "__main__"):
 
     print(dst_matrix.shape)
 
-    print(bin_matrix)
+    # print(bin_matrix)

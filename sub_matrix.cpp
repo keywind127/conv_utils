@@ -48,6 +48,24 @@ extern "C"
 
     }
 
+    void apply_convolution_2(
+                             PARAM_TYPE * dstMatrix, // (BS, OC, OH, OW)
+                             PARAM_TYPE * srcMatrix, // (BS, IC, IH, IW)
+                             PARAM_TYPE * conMatrix, // (OC, IC, CH, CW)
+                             size_t imageHeight,
+                             size_t imageWidth,
+                             size_t inChannels,
+                             size_t batchSize,
+                             size_t convHeight,
+                             size_t convWidth,
+                             size_t outChannels,
+                             size_t strideHeight,
+                             size_t strideWidth) {
+
+        Convolution::apply_convolution_2(dstMatrix, srcMatrix, conMatrix, batchSize, outChannels, inChannels, imageHeight, imageWidth, convHeight, convWidth, strideHeight, strideWidth);
+
+    }
+
     void transform_gradient(
                             PARAM_TYPE * dstMatrix, // (batchSize, featureC, featureH, featureW)
                             PARAM_TYPE * srcMatrix, // (batchSize, convC, featureOutH, featureOutW)
